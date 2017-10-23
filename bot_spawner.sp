@@ -24,12 +24,11 @@
 #include <cstrike>
 #define REQUIRE_EXTENSIONS
 
-#define PLUGIN_VERSION "1.0"
+#define PLUGIN_VERSION "1.1"
 
 #pragma newdecls required
 
 Handle g_bots;
-EngineVersion game;
 
 public Plugin myinfo =
 {
@@ -42,15 +41,21 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	game = GetEngineVersion();
+	switch(GetEngineVersion())
+	{
+		case Engine_CSGO, Engine_CSS:
+		{
+			RegAdminCmd("sm_bot", Bot_CS, ADMFLAG_ROOT);
+		}
+		case Engine_TF2:
+		{
+			RegAdminCmd("sm_bot", Bot_TF, ADMFLAG_ROOT);
+		}
+		default: SetFailState("Game not supported.");
+	}
 	
-	if(game != Engine_CSGO && game != Engine_CSS && game != Engine_TF2)
-		SetFailState("Game not supported.");
-
-
 	CreateConVar("sm_botspawner_version", PLUGIN_VERSION, "", FCVAR_SPONLY|FCVAR_NOTIFY);
 
-	RegAdminCmd("sm_bot", Bot, ADMFLAG_ROOT);
 	RegAdminCmd("sm_nobot", NoBot, ADMFLAG_ROOT);
 
 	LoadTranslations("common.phrases");
@@ -58,7 +63,7 @@ public void OnPluginStart()
 	g_bots = CreateArray();
 }
 
-public Action Bot(int client,int args)
+public Action Bot_TF(int client,int args)
 { 
 	if(client == 0)
 	{
@@ -89,10 +94,49 @@ public Action Bot(int client,int args)
 		PushArrayCell(g_bots, GetClientUserId(ent));
 		ChangeClientTeam(ent, GetClientTeam(client) == 2 ? 3:2);
 		
-		if(game == Engine_CSGO || game == Engine_CSS)
-			CS_RespawnPlayer(ent);
-		if(game == Engine_TF2)
-			TF2_RespawnPlayer(ent);
+		TF2_RespawnPlayer(ent);
+			
+		TeleportEntity(ent, end, normal, NULL_VECTOR); 
+
+	} 
+
+	PrintToChat(client, " \x04[BotSpawner] \x01You have spawned a bot");
+
+	return Plugin_Handled;
+}  
+
+public Action Bot_CS(int client,int args)
+{ 
+	if(client == 0)
+	{
+		PrintToServer("%t","Command is in-game only");
+		return Plugin_Handled;
+	}
+
+	float start[3], angle[3], end[3], normal[3]; 
+	GetClientEyePosition(client, start); 
+	GetClientEyeAngles(client, angle); 
+     
+	TR_TraceRayFilter(start, angle, MASK_SOLID, RayType_Infinite, RayDontHitSelf, client); 
+	if (TR_DidHit(INVALID_HANDLE)) 
+	{ 
+		TR_GetEndPosition(end, INVALID_HANDLE); 
+		TR_GetPlaneNormal(INVALID_HANDLE, normal); 
+		GetVectorAngles(normal, normal); 
+		normal[0] += 90.0; 
+		
+		char botname[128];
+		Format(botname, sizeof(botname), "Spawned (%i)", GetArraySize(g_bots)+1);
+		
+		int ent = CreateFakeClient(botname);
+			
+		if(ent == -1)
+			return Plugin_Handled;
+			
+		PushArrayCell(g_bots, GetClientUserId(ent));
+		ChangeClientTeam(ent, GetClientTeam(client) == 2 ? 3:2);
+		
+		CS_RespawnPlayer(ent);
 			
 		TeleportEntity(ent, end, normal, NULL_VECTOR); 
 
